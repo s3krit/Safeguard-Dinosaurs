@@ -1,5 +1,7 @@
 #define SIGLENGTH 8
 #define CHUNK 1024
+#define TRUE 1
+#define FALSE 0
 
 void recursedir(char*,void (*)(const char*));
 void dumpFile(const char*);

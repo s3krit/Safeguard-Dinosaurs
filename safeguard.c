@@ -38,27 +38,37 @@ char* mapSignatures(const char* fileLoc){
 void scanFile(const char* filename){
     struct stat *buf = malloc(sizeof(struct stat));
     int sigcount,i,j;
+    int virusDetected = FALSE;
     char needle[SIGLENGTH];
     char* signatures = mapSignatures(sigFile);
     if (signatures == NULL){
         fputs("Missing signature file?",stderr);
         return;
     }
-    FILE *fp = fopen(filename,"rb");
-    fclose(fp);
     stat(sigFile,buf);
     sigcount = ((int)buf->st_size)/SIGLENGTH;
+
+    FILE *fp = fopen(filename,"rb");
+    if (fp == NULL){
+        fprintf(stderr,"Unable to open file to scan: %s\n",filename);
+        return;
+    }
+    stat(filename,buf);
+    char* fileptr = mmap(NULL, buf->st_size, PROT_READ, MAP_SHARED, fileno(fp), 0);
+    fclose(fp);
     for (i = 0; i < sigcount; i++){
         for (j = 0; j < SIGLENGTH; j++){
             needle[j] = signatures[(i*SIGLENGTH)+j];
         }
-        char *p = memmem(signatures,buf->st_size,needle,(size_t)SIGLENGTH);
-        if (p == NULL){
-            puts("Virus detected!");
-        } else {
-            puts("File safe!");
+        char *p = memmem(fileptr,buf->st_size,needle,(size_t)SIGLENGTH);
+        if (p != NULL){
+            virusDetected = TRUE;
         }
     }
+    if (virusDetected == TRUE){
+        printf("Virus detected! File: %s\n",filename);
+    }
+    free(buf);
 }
 
 void recursedir(char *path, void (*doOnFile)(const char*)){
@@ -78,7 +88,6 @@ void recursedir(char *path, void (*doOnFile)(const char*)){
             recursedir(nextpath,doOnFile);
         }
         if (ent->d_type == DT_REG){
-            printf("Dumping file '%s':\n",nextpath);
             doOnFile(nextpath);
         }
     }
