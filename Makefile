@@ -1,4 +1,4 @@
-CFLAGS= -O2 -pipe -march=native -std=c99 -pedantic -Wall -Wextra -D_GNU_SOURCE -D_FORTIFY_SOURCE=2
+CFLAGS= -O2 -std=c99 -pedantic -Wextra -Wall
 CC=gcc
 
 safeguard : safeguard.c

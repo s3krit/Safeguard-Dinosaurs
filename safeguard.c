@@ -1,12 +1,7 @@
-#if defined(WIN32) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__)
-#include "dirent.h"
-#else
 #include <dirent.h>
-#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/mman.h>
 #include <sys/stat.h>
 #include "safeguard.h"
 
@@ -29,8 +24,9 @@ char* mapSignatures(const char* fileLoc){
         return NULL;
     }
     stat(fileLoc,buf);
-    char* fileptr = mmap(NULL, buf->st_size, PROT_READ, MAP_SHARED, fileno(fp), 0);
+    char* fileptr = memorymap(fp,buf->st_size);
     fclose(fp);
+    free(fileptr);
     free(buf);
     return fileptr;
 }
@@ -54,27 +50,56 @@ void scanFile(const char* filename){
         return;
     }
     stat(filename,buf);
-    char* fileptr = mmap(NULL, buf->st_size, PROT_READ, MAP_SHARED, fileno(fp), 0);
+    char* fileptr = memorymap(fp,buf->st_size);
     fclose(fp);
     for (i = 0; i < sigcount; i++){
         for (j = 0; j < SIGLENGTH; j++){
             needle[j] = signatures[(i*SIGLENGTH)+j];
         }
-        char *p = memmem(fileptr,buf->st_size,needle,(size_t)SIGLENGTH);
-        if (p != NULL){
+        int p = searchmem(fileptr,buf->st_size,needle,(size_t)SIGLENGTH);
+        if (p == TRUE){
             virusDetected = TRUE;
         }
     }
     if (virusDetected == TRUE){
         printf("Virus detected! File: %s\n",filename);
     }
+    free(fileptr);
     free(buf);
+}
+
+int searchmem(char* haystack, size_t haystackLength, char* needle, size_t needleLength){
+    char* curpos = haystack;
+    char* lastpos = haystack + haystackLength - needleLength;
+
+    //if needle length is 0, technically it is present.
+    if (needleLength == 0){
+        return TRUE;
+    }
+    if (haystackLength < needleLength){
+        return FALSE;
+    }
+    while (curpos < lastpos){
+        if (!memcmp(curpos++,needle,needleLength)){
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+char* memorymap(FILE *fp, size_t fileSize){
+    char* location = (char*)malloc(fileSize);
+    fread(location, sizeof(char), (int)fileSize,fp);
+    return location;
 }
 
 void recursedir(char *path, void (*doOnFile)(const char*)){
     DIR *curdir;
     struct dirent *ent;
     char nextpath[CHUNK] = "";
+    struct stat *buf;
+    buf = malloc(sizeof(struct stat));
+
     if ((curdir = opendir(path)) == NULL)
         return;
 
@@ -82,15 +107,18 @@ void recursedir(char *path, void (*doOnFile)(const char*)){
         strcpy(nextpath,path);
         strcat(nextpath,"/"); 
         strcat(nextpath,ent->d_name);
-        if (ent->d_type == DT_DIR &&
+        stat(nextpath,buf);
+        if (S_ISDIR(buf->st_mode) &&
         strcmp(".",ent->d_name) != 0 &&
         strcmp("..",ent->d_name) != 0) {
             recursedir(nextpath,doOnFile);
         }
-        if (ent->d_type == DT_REG){
+        if (S_ISREG(buf->st_mode)){
+            printf("Checking %s...\n",ent->d_name);
             doOnFile(nextpath);
         }
     }
+    free(buf);
 }
 
 void dumpFile(const char *fileLoc){
