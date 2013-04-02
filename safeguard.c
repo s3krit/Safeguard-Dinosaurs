@@ -1,4 +1,8 @@
+#ifdef _WIN32
+#include "dirent.h"
+#else
 #include <dirent.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,25 +22,28 @@ int main(int argc, char **argv){
 char* mapSignatures(const char* fileLoc){
     FILE *fp = fopen(fileLoc,"rb");
     struct stat *buf;
-    buf = malloc(sizeof(struct stat));
+    char* fileptr;
+    buf = (struct stat* )malloc(sizeof(struct stat));
     if (fp == NULL){
         fputs("Unable to open signature file\n",stderr);
         return NULL;
     }
     stat(fileLoc,buf);
-    char* fileptr = memorymap(fp,buf->st_size);
+    fileptr = memorymap(fp,buf->st_size);
     fclose(fp);
-    free(fileptr);
+    //free(fileptr);
     free(buf);
     return fileptr;
 }
 
 void scanFile(const char* filename){
-    struct stat *buf = malloc(sizeof(struct stat));
-    int sigcount,i,j;
+    struct stat *buf = (struct stat* )malloc(sizeof(struct stat));
+    int sigcount,i,j,p;
     int virusDetected = FALSE;
     char needle[SIGLENGTH];
     char* signatures = mapSignatures(sigFile);
+	FILE *fp;
+	char* fileptr;
     if (signatures == NULL){
         fputs("Missing signature file?",stderr);
         return;
@@ -44,19 +51,19 @@ void scanFile(const char* filename){
     stat(sigFile,buf);
     sigcount = ((int)buf->st_size)/SIGLENGTH;
 
-    FILE *fp = fopen(filename,"rb");
+    fp = fopen(filename,"rb");
     if (fp == NULL){
         fprintf(stderr,"Unable to open file to scan: %s\n",filename);
         return;
     }
     stat(filename,buf);
-    char* fileptr = memorymap(fp,buf->st_size);
+    fileptr = memorymap(fp,buf->st_size);
     fclose(fp);
     for (i = 0; i < sigcount; i++){
         for (j = 0; j < SIGLENGTH; j++){
             needle[j] = signatures[(i*SIGLENGTH)+j];
         }
-        int p = searchmem(fileptr,buf->st_size,needle,(size_t)SIGLENGTH);
+        p = searchmem(fileptr,buf->st_size,needle,(size_t)SIGLENGTH);
         if (p == TRUE){
             virusDetected = TRUE;
         }
@@ -71,7 +78,7 @@ void scanFile(const char* filename){
 int searchmem(char* haystack, size_t haystackLength, char* needle, size_t needleLength){
     char* curpos = haystack;
     char* lastpos = haystack + haystackLength - needleLength;
-
+	unsigned int i;
     //if needle length is 0, technically it is present.
     if (needleLength == 0){
         return TRUE;
@@ -80,9 +87,21 @@ int searchmem(char* haystack, size_t haystackLength, char* needle, size_t needle
         return FALSE;
     }
     while (curpos < lastpos){
-        if (!memcmp(curpos++,needle,needleLength)){
+        if (!memcmp(curpos,needle,needleLength)){
+			// following commented block is pretty good for checking false positives
+			/*
+			for (i = 0; i < needleLength; i++){
+				putchar(curpos[i]);
+			}
+			putchar('\n');
+			for (i = 0; i < needleLength; i++){
+				putchar(needle[i]);
+			}
+			putchar('\n');
+			//*/
             return TRUE;
         }
+		curpos++;
     }
     return FALSE;
 }
@@ -98,7 +117,7 @@ void recursedir(char *path, void (*doOnFile)(const char*)){
     struct dirent *ent;
     char nextpath[CHUNK] = "";
     struct stat *buf;
-    buf = malloc(sizeof(struct stat));
+    buf = (struct stat*)malloc(sizeof(struct stat));
 
     if ((curdir = opendir(path)) == NULL)
         return;
@@ -114,7 +133,7 @@ void recursedir(char *path, void (*doOnFile)(const char*)){
             recursedir(nextpath,doOnFile);
         }
         if (S_ISREG(buf->st_mode)){
-            printf("Checking %s...\n",ent->d_name);
+            fprintf(stderr,"Checking %s...\n",ent->d_name);
             doOnFile(nextpath);
         }
     }
