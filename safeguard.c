@@ -1,22 +1,33 @@
-#ifdef _WIN32
-#include "dirent.h"
-#else
-#include <dirent.h>
-#endif
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/stat.h>
 #include "safeguard.h"
 
 char* sigFile;
+int virusCount;
+char* summary;
 
 int main(int argc, char **argv){
+    int i;
+    // This is kinda bad, should maybe be dynamically allocated
+    summary = (char*)malloc(sizeof(char)*10000);
     if (argc < 3)
         exit(EXIT_FAILURE);
     sigFile = argv[1];
+    virusCount = 0;
     recursedir(argv[2],&scanFile);
+
+    for(i = 0; i < 20; i++){
+        printf("=");
+    }
+    puts("");
+    puts("Scan summary:");
+    printf("%d viruses detected.\n",virusCount);
+    printf("%s",summary);
     exit(EXIT_SUCCESS);
+}
+
+char* strAppend(char* str1, const char* str2) {
+    str1 = realloc(str1, (strlen(str1) + strlen(str2) + 50) * sizeof(char));
+    strcat(str1, str2);
+    return str1;
 }
 
 char* mapSignatures(const char* fileLoc){
@@ -31,7 +42,6 @@ char* mapSignatures(const char* fileLoc){
     stat(fileLoc,buf);
     fileptr = memorymap(fp,buf->st_size);
     fclose(fp);
-    //free(fileptr);
     free(buf);
     return fileptr;
 }
@@ -69,6 +79,10 @@ void scanFile(const char* filename){
         }
     }
     if (virusDetected == TRUE){
+        virusCount++;
+        strcat(summary, "Virus detected at: ");
+        strcat(summary, filename);
+        strcat(summary, "\n");
         printf("Virus detected! File: %s\n",filename);
     }
     free(fileptr);
@@ -78,7 +92,6 @@ void scanFile(const char* filename){
 int searchmem(char* haystack, size_t haystackLength, char* needle, size_t needleLength){
     char* curpos = haystack;
     char* lastpos = haystack + haystackLength - needleLength;
-	unsigned int i;
     //if needle length is 0, technically it is present.
     if (needleLength == 0){
         return TRUE;
