@@ -145,7 +145,7 @@ void recursedir(char *path, void (*doOnFile)(const char*)){
         strcmp("..",ent->d_name) != 0) {
             recursedir(nextpath,doOnFile);
         }
-        if (S_ISREG(buf->st_mode)){
+        if (S_ISREG(buf->st_mode) && strcmp(ent->d_name,sigFile)){
             fprintf(stderr,"Checking %s...\n",ent->d_name);
             doOnFile(nextpath);
         }
