@@ -3,17 +3,32 @@
 char* sigFile;
 int virusCount;
 char* summary;
+char* signatures;
+int sigcount;
+int scanned = 0;
 
 int main(int argc, char **argv){
     int i;
+    struct stat *buf = (struct stat* )malloc(sizeof(struct stat));
     // This is kinda bad, should maybe be dynamically allocated
     summary = (char*)malloc(sizeof(char)*10000);
+    virusCount = 0;
+
     if (argc < 3)
         exit(EXIT_FAILURE);
-    sigFile = argv[1];
-    virusCount = 0;
-    recursedir(argv[2],&scanFile);
 
+    sigFile = argv[1];
+    // Load signatures file, and count the amount of signatures.
+    signatures = mapSignatures(sigFile);
+    if (signatures == NULL){
+        fputs("Missing signature file?",stderr);
+        exit(EXIT_SUCCESS);
+    }
+    lstat(sigFile,buf);
+    sigcount = ((int)buf->st_size)/SIGLENGTH;
+    free(buf);
+
+    recursedir(argv[2],&scanFile);
     for(i = 0; i < 20; i++){
         printf("=");
     }
@@ -39,7 +54,7 @@ char* mapSignatures(const char* fileLoc){
         fputs("Unable to open signature file\n",stderr);
         return NULL;
     }
-    stat(fileLoc,buf);
+    lstat(fileLoc,buf);
     fileptr = memorymap(fp,buf->st_size);
     fclose(fp);
     free(buf);
@@ -48,27 +63,29 @@ char* mapSignatures(const char* fileLoc){
 
 void scanFile(const char* filename){
     struct stat *buf = (struct stat* )malloc(sizeof(struct stat));
-    int sigcount,i,j,p;
+    int i,j,p;
     int virusDetected = FALSE;
     char needle[SIGLENGTH];
-    char* signatures = mapSignatures(sigFile);
 	FILE *fp;
 	char* fileptr;
-    if (signatures == NULL){
-        fputs("Missing signature file?",stderr);
-        return;
-    }
-    stat(sigFile,buf);
-    sigcount = ((int)buf->st_size)/SIGLENGTH;
-
+    scanned++;
     fp = fopen(filename,"rb");
     if (fp == NULL){
-        fprintf(stderr,"Unable to open file to scan: %s\n",filename);
+        fprintf(stderr,"Unable to open file to scan: %s. Scanned: %d\n",filename,scanned);
+        //return;
+    }
+
+    // perform checks as to whether file is worth scanning
+
+    if(!isExecutable(filename)){
+        puts("Not executable");
         return;
     }
-    stat(filename,buf);
+
+    lstat(filename,buf);
     fileptr = memorymap(fp,buf->st_size);
     fclose(fp);
+
     for (i = 0; i < sigcount; i++){
         for (j = 0; j < SIGLENGTH; j++){
             needle[j] = signatures[(i*SIGLENGTH)+j];
@@ -85,8 +102,35 @@ void scanFile(const char* filename){
         strcat(summary, "\n");
         printf("Virus detected! File: %s\n",filename);
     }
+    
+    // post-scan cleanup
+
     free(fileptr);
     free(buf);
+}
+
+int isExecutable(const char* filename){
+    // elf and pe are signatures for ELF executables and Windows Portable Executables, respectively.
+    char elf[4] = {0x7f, 0x45, 0x4c, 0x46}; // '.ELF' at start of file
+    char pe[4] = {0x4d, 0x5a, 0x40, 0x00}; // 'MZ@.' at start of file
+    char fileheader[4] = {0};
+    int i;
+
+   FILE *fp = fopen(filename,"rb");
+
+   // if we can't read it, why try and scan it?
+   if (fp == NULL){
+       return FALSE;
+   }
+
+   for (i = 0; i <= 4; i++){
+       fileheader[i] = getc(fp);
+   }
+
+   if (memcmp(fileheader,elf,4) == 0 || memcmp(fileheader,pe,4) == 0){
+       return TRUE;
+   }
+    return FALSE;
 }
 
 int searchmem(char* haystack, size_t haystackLength, char* needle, size_t needleLength){
@@ -101,17 +145,6 @@ int searchmem(char* haystack, size_t haystackLength, char* needle, size_t needle
     }
     while (curpos < lastpos){
         if (!memcmp(curpos,needle,needleLength)){
-			// following commented block is pretty good for checking false positives
-			/*
-			for (i = 0; i < needleLength; i++){
-				putchar(curpos[i]);
-			}
-			putchar('\n');
-			for (i = 0; i < needleLength; i++){
-				putchar(needle[i]);
-			}
-			putchar('\n');
-			//*/
             return TRUE;
         }
 		curpos++;
@@ -139,7 +172,9 @@ void recursedir(char *path, void (*doOnFile)(const char*)){
         strcpy(nextpath,path);
         strcat(nextpath,"/"); 
         strcat(nextpath,ent->d_name);
-        stat(nextpath,buf);
+
+        // Must use lstat here or it will reach symlinks and cry
+        lstat(nextpath,buf);
         if (S_ISDIR(buf->st_mode) &&
         strcmp(".",ent->d_name) != 0 &&
         strcmp("..",ent->d_name) != 0) {
