@@ -78,9 +78,10 @@ void scanFile(const char* filename){
     // perform checks as to whether file is worth scanning
 
     if(!isExecutable(filename)){
-        puts("Not executable");
         return;
     }
+
+    fprintf(stderr,"Checking %s...\n",filename);
 
     lstat(filename,buf);
     fileptr = memorymap(fp,buf->st_size);
@@ -112,7 +113,7 @@ void scanFile(const char* filename){
 int isExecutable(const char* filename){
     // elf and pe are signatures for ELF executables and Windows Portable Executables, respectively.
     char elf[4] = {0x7f, 0x45, 0x4c, 0x46}; // '.ELF' at start of file
-    char pe[4] = {0x4d, 0x5a, 0x40, 0x00}; // 'MZ@.' at start of file
+    char pe[2] = {0x4d, 0x5a}; // 'MZ' at start of file
     char fileheader[4] = {0};
     int i;
 
@@ -127,7 +128,7 @@ int isExecutable(const char* filename){
        fileheader[i] = getc(fp);
    }
 
-   if (memcmp(fileheader,elf,4) == 0 || memcmp(fileheader,pe,4) == 0){
+   if (memcmp(fileheader,elf,4) == 0 || memcmp(fileheader,pe,2) == 0){
        return TRUE;
    }
     return FALSE;
@@ -181,7 +182,6 @@ void recursedir(char *path, void (*doOnFile)(const char*)){
             recursedir(nextpath,doOnFile);
         }
         if (S_ISREG(buf->st_mode) && strcmp(ent->d_name,sigFile)){
-            fprintf(stderr,"Checking %s...\n",ent->d_name);
             doOnFile(nextpath);
         }
     }
