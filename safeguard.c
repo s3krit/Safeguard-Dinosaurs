@@ -72,12 +72,13 @@ void scanFile(const char* filename){
     fp = fopen(filename,"rb");
     if (fp == NULL){
         fprintf(stderr,"Unable to open file to scan: %s. Scanned: %d\n",filename,scanned);
-        //return;
+        return;
     }
 
     // perform checks as to whether file is worth scanning
 
     if(!isExecutable(filename)){
+        fclose(fp);
         return;
     }
 
@@ -124,10 +125,10 @@ int isExecutable(const char* filename){
        return FALSE;
    }
 
-   for (i = 0; i <= 4; i++){
+   for (i = 0; i < 4; i++){
        fileheader[i] = getc(fp);
    }
-
+   fclose(fp);
    if (memcmp(fileheader,elf,4) == 0 || memcmp(fileheader,pe,2) == 0){
        return TRUE;
    }

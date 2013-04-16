@@ -3,6 +3,7 @@
 #define TRUE 1
 #define FALSE 0
 #ifdef _WIN32
+#define lstat stat
 #include "dirent.h"
 #else
 #include <dirent.h>
