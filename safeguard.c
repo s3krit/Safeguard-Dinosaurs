@@ -1,3 +1,12 @@
+/*
+
+Safeguard Dinosaurs is a simple anti-virus written in C.
+It is written by me - Martin Pugh. Explanations of each 
+function can be found in safeguard.h. Comments in this
+file only refer to specific lines.
+
+*/
+
 #include "safeguard.h"
 
 char* sigFile;
@@ -13,7 +22,8 @@ int main(int argc, char **argv){
     // This is kinda bad, should maybe be dynamically allocated
     summary = (char*)malloc(sizeof(char)*10000);
     virusCount = 0;
-
+    
+    // If all arguments aren't there, no point running.
     if (argc < 3)
         exit(EXIT_FAILURE);
 
